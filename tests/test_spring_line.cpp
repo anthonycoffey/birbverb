@@ -43,34 +43,6 @@ namespace
         line.process (in.data(), out.data(), numSamples);
         return out;
     }
-
-    /** Band-limited copy of an impulse response, so RT60 can be measured per
-        band. A plain FFT brick wall is fine here: this is offline test code and
-        the pre-ringing lands before the decay we are fitting. */
-    std::vector<float> bandLimited (const std::vector<float>& x, double lowHz,
-                                    double highHz, double fs)
-    {
-        int n = 1;
-        while (n < (int) x.size()) n <<= 1;
-
-        auto s = spectrum (x, n);
-        const int lo = hzToBin (lowHz,  n, fs);
-        const int hi = hzToBin (highHz, n, fs);
-        for (int k = 0; k <= n / 2; ++k)
-            if (k < lo || k > hi)
-            {
-                s[(size_t) k] = { 0.0, 0.0 };
-                if (k > 0 && k < n / 2) s[(size_t) (n - k)] = { 0.0, 0.0 };
-            }
-
-        // Inverse via conjugation.
-        for (auto& v : s) v = std::conj (v);
-        fft (s);
-        std::vector<float> out (x.size());
-        for (size_t i = 0; i < out.size(); ++i)
-            out[i] = (float) (std::conj (s[i]).real() / (double) n);
-        return out;
-    }
 }
 
 //==============================================================================

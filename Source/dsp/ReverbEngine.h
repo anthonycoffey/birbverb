@@ -3,16 +3,13 @@
 // The engine: everything between the plugin's input and output.
 //
 // ============================================================================
-//  STATUS: wiring complete, DSP stages not implemented.
+//  STATUS: the tank is real. The circuit stages are not.
 //
-//  The dry path, mix, level and bypass are real. The wet path runs through
-//  SpringTank, which is a skeleton (SPEC-001), so the wet signal is currently
-//  silent and the plugin passes audio through. That is deliberate: PLAN-001
-//  Phase 0 ships a loadable plugin with all ten parameters automatable and no
-//  reverb, so the UI and DSP workstreams can proceed in parallel.
-//
-//  Phase 1 fills in SpringTank. Phase 2 adds the drive and recovery stages from
-//  SPEC-002, which is where the four circuit models become audibly different.
+//  The dry path, mix, level, bypass and SpringTank are all implemented, so the
+//  plugin makes spring reverb. What is still missing is SPEC-002: the send
+//  high-pass, the driver and transformer, the recovery stage and the per-model
+//  mix network. Until those exist the four circuit models sound the same as
+//  each other, because the circuit parameter has nothing to select between yet.
 // ============================================================================
 
 #include "CircuitModel.h"
@@ -73,9 +70,9 @@ public:
                 const float dry = data[i];
 
                 // TODO(SPEC-002): send high-pass -> driver -> transformer -> tank
-                //                 -> recovery -> tone -> mix network. For now the
-                //                 tank is fed directly and returns silence.
-                const float wet = tank.processSample (dry);
+                //                 -> recovery -> tone -> mix network. The tank is
+                //                 real; everything around it is still missing.
+                const float wet = recoveryMakeup * tank.processSample (dry);
 
                 smoothedMix   += (targetMix   - smoothedMix)   * mixSmoothingCoeff;
                 smoothedLevel += (targetLevel - smoothedLevel) * mixSmoothingCoeff;
@@ -93,8 +90,8 @@ public:
 private:
     void applyParams (const EngineParams& p, bool force)
     {
-        const bool tankChanged = force || p.tank != params.tank
-                                       || p.decay != params.decay;
+        const bool tankChanged  = force || p.tank != params.tank;
+        const bool decayChanged = force || p.decay != params.decay;
         params = p;
 
         targetMix   = std::clamp (p.mix, 0.0f, 100.0f) * 0.01f;
@@ -106,6 +103,24 @@ private:
             config.rt60Seconds = std::clamp (p.decay, 0.8, 4.5);
             for (int ch = 0; ch < channels; ++ch)
                 tanks[(size_t) ch].configure (config);
+
+            // Stands in for SPEC-002's recovery stage. The pickup transducer
+            // passes on only what it does not reflect, so the tank's tap is
+            // scaled by (1 - reflection) — and on the hardware a recovery amp
+            // is what puts that back before the mix network sees it. Without
+            // one the wet path sits about 17 dB under the dry and the plugin
+            // reads as broken rather than as quiet. This is not a fitted
+            // level: it is exactly the tap fraction, inverted. SPEC-002
+            // replaces it with the real stage, which has a gain per circuit.
+            recoveryMakeup = (float) (1.0 / std::max (0.05, 1.0 - config.reflectionCoefficient));
+        }
+        else if (decayChanged)
+        {
+            // Decay alone never needs a reconfigure, and must not get one:
+            // configure() re-derives every spring, while setDecaySeconds only
+            // moves the loop gain, which is already smoothed at 100 ms.
+            for (int ch = 0; ch < channels; ++ch)
+                tanks[(size_t) ch].setDecaySeconds (std::clamp (p.decay, 0.8, 4.5));
         }
 
         // 20 ms one-pole smoothing, per SPEC-003's smoothing table.
@@ -127,6 +142,7 @@ private:
     float targetMix = 0.3f,   smoothedMix = 0.3f;
     float targetLevel = 1.0f, smoothedLevel = 1.0f;
     float mixSmoothingCoeff = 0.001f;
+    float recoveryMakeup    = 4.0f;
 };
 
 } // namespace bv
