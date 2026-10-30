@@ -1,7 +1,7 @@
 ---
 id: SPEC-001
 title: 'Spring tank DSP core'
-status: ready
+status: in-progress
 created: 2026-10-29
 author: Anthony Coffey
 reviewers: []
@@ -11,6 +11,38 @@ affected_repos: ['birbverb']
 ## Reviewer Notes
 
 <!-- Leave empty until code review. When requesting changes, reviewer adds feedback here: -->
+
+### Implementation note, 2026-10-30 — the CPU budget is already exceeded
+
+The Constraints section budgets **under 2% of one core at 48 kHz** for the whole
+3-spring tank. With `DispersiveAllpass` implemented, the allpass cascades *alone* were
+measured at:
+
+| Build | 3 x M_low=100 + M_high=200 = 500 sections/sample |
+| --- | --- |
+| `-O2`, scalar | **6.53%** of one core at 48 kHz |
+| `-O3 -march=native -flto` | **4.41%** of one core at 48 kHz |
+
+Measured on Apple M-series silicon, which is *faster* than the "2020-era laptop" the
+budget names, and this is before `SpringLine` adds delay lines, loss filters and
+reflections, and before SPEC-002's drive and recovery stages spend their own 6%.
+
+So the constraint is not at risk, it is already breached by 2–3x. Three options, in the
+order they should be considered:
+
+1. **Parker's chirp-straightening**, already documented in the dispersion study as the
+   first optimisation to reach for. Halves both section counts, so roughly 2.2–3.3%.
+   Published, measured and reversible, but it introduces a crossover notch and we have
+   no listening reference to judge the trade against.
+2. **Vectorise within a section.** Each section's feedback is `integerDelay` samples
+   long, so the recursion decouples into `integerDelay` independent sample streams that
+   can run in parallel lanes. `integerDelay` is 4–5 at 48 kHz. This changes no
+   coefficient and no output, which makes it the cheapest honest win.
+3. **Revise the budget**, if a measurement on the actual target hardware says 2% was
+   optimistic rather than the implementation being wasteful.
+
+Needs a decision before `SpringLine` lands, because option 1 changes the structure
+`SpringLine` wraps.
 
 ---
 
@@ -283,13 +315,15 @@ tension, not a formality.
       from measured geometry
 - [x] Resolve the dispersion transition frequency — derived per spring, 2543–4887 Hz
 - [x] Correct the chirp direction in this spec, ADR-001 and the tank study
-- [ ] GREEN: `Dispersion.h` — the three closed forms
-- [ ] `tests/test_dispersion_curve.cpp` — assert the closed forms against the published
+- [x] GREEN: `Dispersion.h` — the three closed forms
+- [x] `tests/test_dispersion_curve.cpp` — assert the closed forms against the published
       numbers. Runs without `SpringTank`, so it is not tagged `[.red]`
-- [ ] RED: `tests/test_dispersion.cpp` — ascending group delay, `F_C` location, secondary
+- [x] RED: `tests/test_dispersion.cpp` — ascending group delay, `F_C` location, secondary
       series direction
-- [ ] RED: `tests/test_decay.cpp` — RT60 measurement helper, then the tracking assertions
-- [ ] GREEN: `DispersiveAllpass` — stretched section with fractional `k` via Parker eq. (6)
+- [x] RED: `tests/test_decay.cpp` — RT60 measurement helper, then the tracking assertions
+- [x] GREEN: `DispersiveAllpass` — stretched section with fractional `k` via Parker eq. (6).
+      `tests/test_dispersive_allpass.cpp` was written against a passthrough skeleton, watched
+      to fail, then promoted out of `[.red]` once the structure realised the curve
 - [ ] GREEN: `SpringLine` — delay loop, allpass cascade, loss filter, reflections
 - [ ] GREEN: `SpringTank` — multi-spring sum, secondary loop, tank-type configuration
 - [ ] RED then GREEN: echo-spacing, spring-mismatch, frequency-dependent decay tests
