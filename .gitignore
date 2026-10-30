@@ -1,0 +1,44 @@
+# Build
+build/
+build-*/
+cmake-build-*/
+out/
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.pdb
+*.ilk
+*.exp
+
+# Plugin bundles
+*.vst3/
+*.component/
+*.app/
+
+# Rendered audio from tools/render — a listening diagnostic, never committed
+# (SPEC-006 Non-goals: wav files are not pass/fail oracles)
+*.wav
+
+# IDE
+.vscode/
+.idea/
+.vs/
+*.user
+*.xcodeproj/
+*.xcworkspace/
+CMakeUserPresets.json
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Sprite authoring intermediates. The finished sheets and their generation
+# inputs under Assets/sprites/source/ ARE committed — see ADR-003.
+Assets/sprites/frames/
+Assets/sprites/**/*.blend1
+Assets/sprites/**/*.xcf~
