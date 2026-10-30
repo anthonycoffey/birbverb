@@ -1,0 +1,19 @@
+# Normalise line endings on commit, check out LF everywhere.
+# Without this, every file shows as modified when the repo moves between
+# Windows and macOS.
+* text=auto eol=lf
+
+# Sprite sheets and their generation inputs. ADR-003 commits these to plain Git
+# with no LFS, so they must never be line-ending converted.
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.wav    binary
+*.aiff   binary
+*.flac   binary
+*.blend  binary
+*.psd    binary
+*.xcf    binary
+*.pdf    binary
+*.ico    binary
+*.icns   binary
