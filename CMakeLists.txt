@@ -6,10 +6,23 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(APPLE)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
+    # FORCE, and guarded on the value being empty, because CMake's Darwin
+    # platform initialisation already created both of these as empty cache
+    # entries during project(). A plain set(... CACHE ...) will not overwrite
+    # an existing entry, so without FORCE these two lines are silent no-ops and
+    # the build quietly comes out single-arch against the host SDK.
+    #
+    # The empty-value guard is what keeps the documented escape hatch working:
+    # -DCMAKE_OSX_ARCHITECTURES=arm64 makes the entry non-empty, so we leave it
+    # alone. That is the faster build to use while shaking something out.
+    if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+        set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version" FORCE)
+    endif()
+
     # Universal (Apple Silicon + Intel) by default.
-    # For a faster local/dev build, override with -DCMAKE_OSX_ARCHITECTURES=arm64
-    set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Build architectures")
+    if(NOT CMAKE_OSX_ARCHITECTURES)
+        set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Build architectures" FORCE)
+    endif()
 endif()
 
 option(BIRBVERB_BUILD_TESTS "Build the offline DSP test suite" ON)

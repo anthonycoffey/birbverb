@@ -276,7 +276,9 @@ TEST_CASE ("the secondary loop descends and dies out above 10 kHz",
     REQUIRE_THAT (atNyq, WithinMs ( 1.04, Percent (2.0)));
 
     // Monotonically decreasing, which is what makes it a descending chirp.
-    double previous = atDc;
+    // Compared in SAMPLES, not ms: groupDelaySamples() returns samples, and
+    // atDc above has already been scaled to milliseconds for the assertions.
+    double previous = groupDelaySamples (a, 1.0, M, 0.0);
     for (int i = 1; i <= 24; ++i)
     {
         const double next = groupDelaySamples (a, 1.0, M, pi * (double) i / 24.0);
