@@ -15,33 +15,67 @@ affected_repos: ['birbverb']
 ### Implementation note, 2026-10-30 — the CPU budget is already exceeded
 
 The Constraints section budgets **under 2% of one core at 48 kHz** for the whole
-3-spring tank. With `DispersiveAllpass` implemented, the allpass cascades *alone* were
-measured at:
+3-spring tank. With `DispersiveAllpass` implemented, the allpass cascades *alone* measure,
+on Apple M-series silicon at `-O3 -march=native -flto`:
 
-| Build | 3 x M_low=100 + M_high=200 = 500 sections/sample |
-| --- | --- |
-| `-O2`, scalar | **6.53%** of one core at 48 kHz |
-| `-O3 -march=native -flto` | **4.41%** of one core at 48 kHz |
+| Configuration | Sections/sample | Cost |
+| --- | --- | --- |
+| **As specified** — 3 x `M_low`=100 plus `M_high`=200 | 500 | **4.40%** |
+| Chirp-straightened, both loops at `M/2` | 250 | **1.91%** |
+| The three springs alone, no secondary loop | 300 | 2.52% |
+| The secondary loop alone | 200 | 1.86% |
 
-Measured on Apple M-series silicon, which is *faster* than the "2020-era laptop" the
-budget names, and this is before `SpringLine` adds delay lines, loss filters and
-reflections, and before SPEC-002's drive and recovery stages spend their own 6%.
+(At `-O2` without `-march=native` the first row is 6.53%.) Cost is linear in section
+count, about 0.0088% per section per core. This is before `SpringLine` adds delay lines,
+loss filters and reflections, and before SPEC-002's stages spend their own 6%. The
+measuring hardware is also *faster* than the "2020-era laptop" the budget names.
 
-So the constraint is not at risk, it is already breached by 2–3x. Three options, in the
-order they should be considered:
+So the constraint is not at risk, it is breached by roughly 2.2x.
 
-1. **Parker's chirp-straightening**, already documented in the dispersion study as the
-   first optimisation to reach for. Halves both section counts, so roughly 2.2–3.3%.
-   Published, measured and reversible, but it introduces a crossover notch and we have
-   no listening reference to judge the trade against.
-2. **Vectorise within a section.** Each section's feedback is `integerDelay` samples
-   long, so the recursion decouples into `integerDelay` independent sample streams that
-   can run in parallel lanes. `integerDelay` is 4–5 at 48 kHz. This changes no
-   coefficient and no output, which makes it the cheapest honest win.
-3. **Revise the budget**, if a measurement on the actual target hardware says 2% was
+**The striking line is the last one.** `M_high` = 200 costs 1.86% — 42% of the total, and
+more than all three springs put together — to render a series that SPEC-001 requirement 11
+puts *at least 30 dB down*. The most expensive single component in the tank is its
+quietest. If an approximation has to go somewhere, that is where it is least audible.
+
+#### Two structural ideas that do not work, both measured
+
+Recorded so nobody spends an afternoon rediscovering them:
+
+- **Decoupling into `integerDelay` independent sample streams.** True for integer `k`:
+  the section reduces to `w[n] = (1-a^2)*s[n] - a*w[n-K]`, which is `K` independent
+  streams. It is **false** for the fractional case we actually use, because the
+  interpolator carries its own first-order recursion (`v[n]` depends on `v[n-1]`) that
+  couples adjacent samples. Replacing the allpass interpolator with an FIR one would
+  restore the decoupling but break unity magnitude, which is the one property the whole
+  component exists to have.
+- **Block-outer, section-inner processing** for cache locality. Measured at **0.35x — three
+  times slower.** There is no locality problem to fix: one chain's entire state is about
+  2.4 KB and already L1-resident, so restructuring only adds `M` round-trips of the audio
+  block through memory. Output is bit-identical, which is how the comparison was made
+  fair; it is simply slower.
+
+At roughly 6.5 cycles per section, the cascade is **latency-bound on the serial dependency
+chain inside each section**, not throughput-bound. Micro-optimising the arithmetic will
+not move it.
+
+#### Options, in the order worth considering
+
+1. **Chirp-straighten the secondary loop only** (`M_high` 200 -> 100), taking the total to
+   roughly 3.5%. Buys the largest single saving at the point the spec itself says is 30 dB
+   down. Does not touch the main series at all.
+2. **Chirp-straighten both loops**, which lands at **1.91% — inside budget**. Published,
+   measured and reversible, but it introduces a known notch at the crossover and we have
+   no listening reference to judge the trade against yet.
+3. **SIMD across chains.** The three springs and the secondary loop are four fully
+   independent cascades, which is the only real parallelism in the structure. The obstacle
+   is that each spring has a different `integerDelay` by design — requirement 4 spreads
+   `F_C` on purpose — so the lanes need either gather loads or a forced common
+   `integerDelay`, which would push some springs' interpolator remainder outside the
+   [0.5, 1.5] window where it is well conditioned.
+4. **Revise the budget**, if a measurement on the actual target hardware says 2% was
    optimistic rather than the implementation being wasteful.
 
-Needs a decision before `SpringLine` lands, because option 1 changes the structure
+Needs a decision before `SpringLine` lands, because options 1 and 2 change the structure
 `SpringLine` wraps.
 
 ---
