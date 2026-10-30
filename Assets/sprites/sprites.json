@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "scale": 1,
+  "_comment": "Sprite geometry and control layout - SPEC-005. Authoring rules live in docs/documentation/guides/sprite-authoring.md. Control x/y are the TOP-LEFT of the frame rectangle in the 600x650 editor space. None of the PNG files referenced here exist yet; every control falls back to procedural drawing until they do, which is why the plugin builds and runs on a fresh clone.",
+
+  "editor": { "width": 600, "height": 650 },
+
+  "atlases": {
+    "background": {
+      "file": "background.png",
+      "cols": 1, "rows": 1,
+      "frameWidth": 600, "frameHeight": 650,
+      "frames": 1
+    },
+    "knob_large": {
+      "file": "knob_large.png",
+      "cols": 10, "rows": 10,
+      "frameWidth": 104, "frameHeight": 104,
+      "frames": 100,
+      "rotarySweepDegrees": 270
+    },
+    "knob_small": {
+      "file": "knob_small.png",
+      "cols": 10, "rows": 10,
+      "frameWidth": 72, "frameHeight": 72,
+      "frames": 100,
+      "rotarySweepDegrees": 270
+    },
+    "knob_small_alt": {
+      "file": "knob_small_alt.png",
+      "cols": 10, "rows": 10,
+      "frameWidth": 72, "frameHeight": 72,
+      "frames": 100,
+      "rotarySweepDegrees": 270
+    },
+    "switch_4way": {
+      "file": "switch_4way.png",
+      "cols": 4, "rows": 1,
+      "frameWidth": 64, "frameHeight": 112,
+      "frames": 4
+    },
+    "switch_3way": {
+      "file": "switch_3way.png",
+      "cols": 3, "rows": 1,
+      "frameWidth": 64, "frameHeight": 112,
+      "frames": 3
+    },
+    "footswitch": {
+      "file": "footswitch.png",
+      "cols": 2, "rows": 1,
+      "frameWidth": 128, "frameHeight": 128,
+      "frames": 2
+    },
+    "led": {
+      "file": "led.png",
+      "cols": 8, "rows": 1,
+      "frameWidth": 32, "frameHeight": 32,
+      "frames": 8
+    },
+    "arrow": {
+      "file": "arrow.png",
+      "cols": 2, "rows": 1,
+      "frameWidth": 36, "frameHeight": 48,
+      "frames": 2
+    },
+    "screen": {
+      "file": "screen.png",
+      "cols": 1, "rows": 1,
+      "frameWidth": 260, "frameHeight": 48,
+      "frames": 1
+    }
+  },
+
+  "controls": {
+    "dwell":   { "atlas": "knob_large",     "x": 84,  "y": 200 },
+    "decay":   { "atlas": "knob_large",     "x": 248, "y": 200 },
+    "tone":    { "atlas": "knob_large",     "x": 412, "y": 200 },
+
+    "locut":   { "atlas": "knob_small",     "x": 60,  "y": 356 },
+    "boing":   { "atlas": "knob_small_alt", "x": 196, "y": 356 },
+    "mix":     { "atlas": "knob_small",     "x": 332, "y": 356 },
+    "level":   { "atlas": "knob_small_alt", "x": 468, "y": 356 },
+
+    "circuit": { "atlas": "switch_4way",    "x": 140, "y": 470 },
+    "tank":    { "atlas": "switch_3way",    "x": 396, "y": 470 },
+    "bypass":  { "atlas": "footswitch",     "x": 236, "y": 500 }
+  }
+}
