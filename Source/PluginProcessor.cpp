@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "dsp/CircuitModel.h"
+#include "dsp/ParameterDefaults.h"
 #include "dsp/TankConfig.h"
 
 using namespace juce;
@@ -8,6 +9,12 @@ using namespace juce;
 //==============================================================================
 // The parameter layout IS the contract in SPEC-003. tests/test_parameters.cpp
 // asserts this table, so a change here without a spec change is a test failure.
+//
+// Every default comes from dsp/ParameterDefaults.h rather than a literal here,
+// because the defaults are also the boot state: SPEC-003's default column is the
+// AB763 circuit-correct position, which is SPEC-004's "Twin '64" foundation row.
+// The two were written out separately once; they drifted on `tone` and `mix`, and
+// the plugin booted showing "Twin '64 *" before the player touched anything.
 
 AudioProcessorValueTreeState::ParameterLayout
 BirbverbAudioProcessor::createParameterLayout()
@@ -21,51 +28,51 @@ BirbverbAudioProcessor::createParameterLayout()
                       bv::circuitModelName (bv::CircuitModel::vibroverb6G16),
                       bv::circuitModelName (bv::CircuitModel::reverbUnit6G15),
                       bv::circuitModelName (bv::CircuitModel::ampegRocket) },
-        0));
+        (int) bv::defaults::circuit));
 
     layout.add (std::make_unique<AudioParameterChoice> (
         ParameterID { bv::ids::tank, v }, "Tank",
         StringArray { bv::tankTypeName (bv::TankType::short2Spring),
                       bv::tankTypeName (bv::TankType::long2Spring),
                       bv::tankTypeName (bv::TankType::long3Spring) },
-        1));   // Long 2-Spring — the Fender blackface tank
+        (int) bv::defaults::tank));   // Long 2-Spring — the Fender blackface tank
 
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { bv::ids::dwell, v }, "Dwell",
-        NormalisableRange<float> (0.0f, 10.0f, 0.01f), 5.0f));
+        NormalisableRange<float> (0.0f, 10.0f, 0.01f), bv::defaults::dwell));
 
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { bv::ids::decay, v }, "Decay",
-        NormalisableRange<float> (0.8f, 4.5f, 0.01f, 0.8f), 3.4f,
+        NormalisableRange<float> (0.8f, 4.5f, 0.01f, 0.8f), (float) bv::defaults::decay,
         AudioParameterFloatAttributes().withLabel ("s")));
 
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { bv::ids::tone, v }, "Tone",
-        NormalisableRange<float> (0.0f, 10.0f, 0.01f), 5.0f));
+        NormalisableRange<float> (0.0f, 10.0f, 0.01f), bv::defaults::tone));
 
     // 318 Hz is the AB763 send high-pass corner — 500 pF into a 1 M grid leak.
     // See circuits/fender-ab763-reverb.md.
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { bv::ids::locut, v }, "Lo Cut",
-        NormalisableRange<float> (80.0f, 600.0f, 1.0f, 0.5f), 318.0f,
+        NormalisableRange<float> (80.0f, 600.0f, 1.0f, 0.5f), (float) bv::defaults::locut,
         AudioParameterFloatAttributes().withLabel ("Hz")));
 
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { bv::ids::boing, v }, "Boing",
-        NormalisableRange<float> (0.0f, 10.0f, 0.01f), 5.0f));
+        NormalisableRange<float> (0.0f, 10.0f, 0.01f), bv::defaults::boing));
 
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { bv::ids::mix, v }, "Mix",
-        NormalisableRange<float> (0.0f, 100.0f, 0.1f), 30.0f,
+        NormalisableRange<float> (0.0f, 100.0f, 0.1f), bv::defaults::mix,
         AudioParameterFloatAttributes().withLabel ("%")));
 
     layout.add (std::make_unique<AudioParameterFloat> (
         ParameterID { bv::ids::level, v }, "Level",
-        NormalisableRange<float> (-12.0f, 12.0f, 0.1f), 0.0f,
+        NormalisableRange<float> (-12.0f, 12.0f, 0.1f), bv::defaults::level,
         AudioParameterFloatAttributes().withLabel ("dB")));
 
     layout.add (std::make_unique<AudioParameterBool> (
-        ParameterID { bv::ids::bypass, v }, "Bypass", false));
+        ParameterID { bv::ids::bypass, v }, "Bypass", bv::defaults::bypass));
 
     return layout;
 }
