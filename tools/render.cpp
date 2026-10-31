@@ -104,7 +104,7 @@ int main (int argc, char** argv)
     const std::string outDir = argc > 1 ? argv[1] : ".";
 
     std::printf ("birbverb offline render -> %s\n", outDir.c_str());
-    std::printf ("NOTE: SpringTank is a skeleton (SPEC-001), so the wet path is silent.\n");
+    std::printf ("NOTE: the tank is real (SPEC-001). The circuit stages are not\n");
     std::printf ("      These renders are dry until PLAN-001 Phase 1 lands.\n\n");
 
     for (const auto& preset : bv::factoryPresets)

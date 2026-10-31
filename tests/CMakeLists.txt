@@ -17,6 +17,7 @@ add_executable(birbverb_tests
     test_stability.cpp
     test_dispersion_curve.cpp
     test_dispersive_allpass.cpp
+    test_spring_line.cpp
     test_dispersion.cpp
     test_decay.cpp)
 
@@ -38,6 +39,13 @@ endif()
 #                  Catch2 so they are hidden from the default run. The TDD loop is:
 #                  write the test tagged [.red], watch it fail here, implement it,
 #                  then drop the leading '.' so it joins the default suite.
+#
+#                  There are currently NO red tests: SPEC-001's were all
+#                  promoted when SpringTank landed. Catch2 exits non-zero when a
+#                  filter matches nothing, so WILL_FAIL keeps this entry green
+#                  while it is empty, and it regains its real meaning the moment
+#                  the next [.red] test is written. That is why it is left in
+#                  place rather than deleted.
 add_test(NAME implemented COMMAND birbverb_tests)
 add_test(NAME red COMMAND birbverb_tests "[red]")
 

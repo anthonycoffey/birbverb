@@ -358,14 +358,17 @@ tension, not a formality.
 - [x] GREEN: `DispersiveAllpass` — stretched section with fractional `k` via Parker eq. (6).
       `tests/test_dispersive_allpass.cpp` was written against a passthrough skeleton, watched
       to fail, then promoted out of `[.red]` once the structure realised the curve
-- [ ] GREEN: `SpringLine` — delay loop, allpass cascade, loss filter, reflections
-- [ ] GREEN: `SpringTank` — multi-spring sum, secondary loop, tank-type configuration
-- [ ] RED then GREEN: echo-spacing, spring-mismatch, frequency-dependent decay tests
-- [ ] RED then GREEN: stability and reset tests
-- [ ] Sample-rate independence tests at 44.1 / 48 / 96 / 192 kHz
-- [ ] Denormal handling and a CPU measurement against the budget
+- [x] GREEN: `SpringLine` — delay loop, allpass cascade, loss filter, reflections.
+      `tests/test_spring_line.cpp` covers requirements 1, 2, 5, 6, 7, 8, 9 and 10 at the
+      single-spring level; the tank-level criteria stay with `SpringTank`
+- [x] GREEN: `SpringTank` — multi-spring sum, secondary loop, tank-type configuration
+- [x] RED then GREEN: echo-spacing, spring-mismatch, frequency-dependent decay tests
+- [x] RED then GREEN: stability and reset tests
+- [x] Sample-rate independence tests at 44.1 / 48 / 96 / 192 kHz
+- [x] Denormal handling and a CPU measurement against the budget — see Reviewer Notes;
+      the budget is breached and the decision is deferred until there is something to hear
 - [ ] REFACTOR: review every constant in the DSP files for a comment naming its source
-- [ ] Wire into `tools/render.cpp` for listening tests
+- [x] Wire into `tools/render.cpp` for listening tests
 
 ## Notes
 
