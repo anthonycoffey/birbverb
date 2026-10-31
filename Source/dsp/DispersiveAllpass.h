@@ -53,52 +53,96 @@ public:
     void prepare (double newSampleRate, double transitionFreqHz,
                   double peakDelayMs, int numSections)
     {
-        sampleRate = newSampleRate > 0.0 ? newSampleRate : 48000.0;
-        sections   = numSections > 0 ? numSections : 1;
+        const double fs = newSampleRate > 0.0 ? newSampleRate : 48000.0;
 
         // k = fs / (2 * F_C), deliberately fractional. Rounding it would move
         // F_C with the sample rate — at 48 kHz, k = 5 is 4800 Hz and k = 6 is
         // 4000 Hz — and break SPEC-001 requirement 9.
-        //
-        // The floor of 1.5 is a structural limit, not a modelling choice: the
-        // integer part of the delay has to be at least one sample or the
-        // section's feedback path has no delay in it at all. k = 1.5 means
-        // F_C = fs/3, far above the 2.5-4.9 kHz the measured springs give.
-        stretch = std::max (1.5, dispersion::stretchFactor (sampleRate, transitionFreqHz));
+        const double k = dispersion::stretchFactor (fs, transitionFreqHz);
+        const double a = dispersion::coeffForPeakDelay (peakDelayMs * 0.001 * fs,
+                                                        k, numSections > 0 ? numSections : 1);
+        prepareDirect (fs, k, a, numSections);
+    }
 
-        const double peakSamples = peakDelayMs * 0.001 * sampleRate;
-        coeff = dispersion::coeffForPeakDelay (peakSamples, stretch, sections);
-        coeff = std::clamp (coeff, -0.999, 0.999);      // the section is only stable inside this
+    /** Configure from k and a directly, rather than from physical targets.
 
-        // The k-sample delay is split into an integer ring buffer and a
-        // first-order allpass carrying the remainder. Taking the integer part
-        // as round(k) - 1 puts the remainder in [0.5, 1.5], which is where a
-        // first-order interpolator is well conditioned; floor(k) would allow a
-        // remainder near zero, whose coefficient approaches 1 and parks a pole
-        // on the unit circle.
-        integerDelay = std::max (1, (int) std::lround (stretch) - 1);
-        const double remainder = std::max (0.0, stretch - (double) integerDelay);
+        The secondary wideband loop needs this: SPEC-001 specifies it as k = 1
+        with a_hf = -0.6, which are stated coefficients rather than something
+        derived from a spring's geometry. Going through prepare() would mean
+        inventing an F_C of fs/2 and a peak delay to match, which is a worse
+        description of the same filter. */
+    void prepareDirect (double newSampleRate, double stretchFactorK,
+                        double coefficient, int numSections)
+    {
+        sampleRate = newSampleRate > 0.0 ? newSampleRate : 48000.0;
+        sections   = numSections > 0 ? numSections : 1;
 
-        // [PARKER11] eq. (6), designed at the midpoint of the band this section
-        // carries. A first-order allpass can match a target delay exactly at
-        // exactly one frequency; the section carries DC to F_C, which is
-        // omega in [0, pi/k], so matching at pi/(2k) is the choice that
-        // minimises the worst-case error across that band rather than
-        // concentrating the accuracy at one end of it.
-        //
-        // Positive root: it is the one that puts the interpolator's own
-        // group-delay peak at Nyquist, outside the band being carried
-        // ([PARKER11] section 3.1). The negative root is the degenerate a = -1
-        // at DC.
-        interpCoeff = dispersion::coeffForFractionalDelay (remainder,
-                                                           dispersion::pi / (2.0 * stretch),
-                                                           true);
-        interpCoeff = std::clamp (interpCoeff, -0.999, 0.999);
+        // The floor is structural, not a modelling choice: the delay inside the
+        // section's feedback path has to be at least one whole sample or the
+        // loop has no delay in it at all. k = 1 is the secondary loop and is
+        // exactly realisable; below 1 nothing is.
+        stretch = std::max (1.0, stretchFactorK);
+        coeff   = std::clamp (coefficient, -0.999, 0.999);   // stable only inside this
 
+        // An exact integer k needs no interpolator at all, and saying so is
+        // better than relying on eq. (6) to hand back a coefficient of zero.
+        // It also makes k = 1 expressible, which the secondary loop needs and
+        // which the round(k) - 1 split below cannot represent.
+        const long   rounded   = std::lround (stretch);
+        const double remainder = std::abs (stretch - (double) rounded) < 1.0e-9
+                                   ? 0.0 : stretch - (double) std::max (1L, rounded - 1);
+
+        if (remainder == 0.0)
+        {
+            integerDelay = std::max (1, (int) rounded);
+            interpCoeff  = 0.0;
+            usesInterp   = false;
+        }
+        else
+        {
+            // Taking the integer part as round(k) - 1 puts the remainder in
+            // [0.5, 1.5], which is where a first-order interpolator is well
+            // conditioned; floor(k) would allow a remainder near zero, whose
+            // coefficient approaches 1 and parks a pole on the unit circle.
+            integerDelay = std::max (1, (int) rounded - 1);
+
+            // [PARKER11] eq. (6), designed at the midpoint of the band this
+            // section carries. A first-order allpass matches a target delay at
+            // exactly one frequency; the section carries DC to F_C, which is
+            // omega in [0, pi/k], so pi/(2k) minimises worst-case error across
+            // that band rather than concentrating accuracy at one end.
+            //
+            // Positive root: it puts the interpolator's own group-delay peak at
+            // Nyquist, outside the band being carried ([PARKER11] section 3.1).
+            interpCoeff = std::clamp (
+                dispersion::coeffForFractionalDelay (remainder,
+                                                     dispersion::pi / (2.0 * stretch),
+                                                     true),
+                -0.999, 0.999);
+            usesInterp = true;
+        }
+
+        resize();
+        reset();
+    }
+
+    /** Pre-grow the buffers so a later prepare() with a shorter delay cannot
+        allocate. SpringTank calls this once with the worst case across every
+        tank type, because switching tank type happens on the audio thread. */
+    void reserveFor (int maxSections, int maxIntegerDelay)
+    {
+        line.reserve ((size_t) std::max (1, maxSections) * (size_t) std::max (1, maxIntegerDelay));
+        interpX.reserve ((size_t) std::max (1, maxSections));
+        interpY.reserve ((size_t) std::max (1, maxSections));
+    }
+
+    void resize()
+    {
+        // assign() only allocates when the new size exceeds capacity, which is
+        // what reserveFor() exists to prevent.
         line.assign ((size_t) sections * (size_t) integerDelay, 0.0f);
         interpX.assign ((size_t) sections, 0.0f);
         interpY.assign ((size_t) sections, 0.0f);
-        reset();
     }
 
     void reset()
@@ -126,6 +170,7 @@ public:
     {
         const float a = (float) coeff;
         const float c = (float) interpCoeff;
+        const bool  interp = usesInterp;
 
         float s = input;
         for (int m = 0; m < sections; ++m)
@@ -133,11 +178,14 @@ public:
             const size_t slot = (size_t) m * (size_t) integerDelay + (size_t) pos;
 
             const float u = line[slot];
-            float v = c * u + interpX[(size_t) m] - c * interpY[(size_t) m];
-            v = flush (v);
 
-            interpX[(size_t) m] = u;
-            interpY[(size_t) m] = v;
+            float v = u;
+            if (interp)
+            {
+                v = flush (c * u + interpX[(size_t) m] - c * interpY[(size_t) m]);
+                interpX[(size_t) m] = u;
+                interpY[(size_t) m] = v;
+            }
 
             const float y = a * s + v;
             line[slot] = flush (s - a * y);
@@ -181,6 +229,7 @@ private:
     double interpCoeff  = 0.0;
     int    integerDelay = 1;
     int    pos          = 0;
+    bool   usesInterp   = true;
 
     std::vector<float> line;        ///< sections * integerDelay, one ring per section
     std::vector<float> interpX;     ///< per-section interpolator input history

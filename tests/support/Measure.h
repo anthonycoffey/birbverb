@@ -333,6 +333,48 @@ inline double groupDelayInBand (const std::vector<float>& ir, int fftSize, doubl
 }
 
 //==============================================================================
+// Band isolation
+//
+// For per-band RT60. The obvious cheap approach — subtracting one one-pole
+// low-pass from another — leaks badly: both filters are near unity well below
+// their corners, so the difference leaves roughly -30 dB of out-of-band signal.
+// That is fatal for a decay measurement, because the leaked band keeps ringing
+// after the band of interest has gone and the Schroeder slope flattens onto it,
+// so every band's RT60 drifts toward the longest one in the signal.
+//
+// A brick wall in the frequency domain has no such floor, and offline test code
+// can afford it.
+
+/** Zeroes every bin outside [lowHz, highHz] and transforms back. */
+inline std::vector<float> bandLimited (const std::vector<float>& x, double lowHz,
+                                       double highHz, double sampleRate)
+{
+    int n = 1;
+    while (n < (int) x.size()) n <<= 1;
+
+    auto s = spectrum (x, n);
+    const int lo = hzToBin (lowHz,  n, sampleRate);
+    const int hi = hzToBin (highHz, n, sampleRate);
+
+    for (int k = 0; k <= n / 2; ++k)
+        if (k < lo || k > hi)
+        {
+            s[(size_t) k] = { 0.0, 0.0 };
+            if (k > 0 && k < n / 2)
+                s[(size_t) (n - k)] = { 0.0, 0.0 };
+        }
+
+    // Inverse transform by conjugation, so there is only one FFT to trust.
+    for (auto& v : s) v = std::conj (v);
+    fft (s);
+
+    std::vector<float> out (x.size());
+    for (size_t i = 0; i < out.size(); ++i)
+        out[i] = (float) (std::conj (s[i]).real() / (double) n);
+    return out;
+}
+
+//==============================================================================
 // Distortion
 //
 // Measure with a fundamental on an exact bin centre (Generate::sineAtBin) so

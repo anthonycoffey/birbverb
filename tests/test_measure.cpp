@@ -302,3 +302,29 @@ TEST_CASE ("generators are deterministic for a given seed", "[measure]")
     REQUIRE (a != c);
     REQUIRE (allFinite (a));
 }
+
+//==============================================================================
+TEST_CASE ("bandLimited keeps its band and rejects everything else", "[spec-006]")
+{
+    // The tool exists because the cheap alternative leaks, so the thing worth
+    // asserting is the rejection figure rather than the passband.
+    constexpr double fs = 48000.0;
+    constexpr int    n  = 16384;
+
+    // 300 Hz plus 5000 Hz at equal amplitude.
+    auto mixed = sine (n, 300.0, fs, 0.5f);
+    const auto high = sine (n, 5000.0, fs, 0.5f);
+    for (size_t i = 0; i < mixed.size(); ++i)
+        mixed[i] += high[i];
+
+    const auto lowOnly = bandLimited (mixed, 100.0, 1000.0, fs);
+
+    // The 300 Hz component survives essentially intact...
+    REQUIRE_THAT (rms (lowOnly), WithinRatio (0.5 * 0.70710678, 0.02));
+
+    // ...and the 5 kHz one is gone, far below the -30 dB a difference of two
+    // one-poles would have left behind.
+    const double rejected = bandEnergyDb (lowOnly, n, fs, 4500.0, 5500.0);
+    const double kept     = bandEnergyDb (lowOnly, n, fs,  250.0,  350.0);
+    REQUIRE (rejected < kept - 100.0);
+}
