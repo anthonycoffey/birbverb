@@ -251,9 +251,17 @@ file format.
   it as a possible cheap mode. Needs a decision, then a spec. Related: Parker's
   chirp-straightening cuts the allpass cost to about a third and is documented in the
   dispersion study as the first optimisation to reach for.
-- **CPU.** `M_low = 100` per spring plus `M_high = 200` means a 3-spring tank runs **500
-  allpass sections per sample**. SPEC-001 budgets 2% of one core at 48 kHz. That budget
-  is the binding constraint on the whole design, and it has never been measured.
+- **CPU — now measured, and the budget is breached.** `M_low = 100` per spring plus
+  `M_high = 200` means a 3-spring tank runs **500 allpass sections per sample**. SPEC-001
+  budgets 2% of one core at 48 kHz. With `DispersiveAllpass` implemented, the cascades
+  alone measure **4.40%** at `-O3 -march=native -flto` (6.53% at `-O2`), on Apple M-series
+  silicon — faster hardware than the budget's "2020-era laptop", and before `SpringLine`
+  exists at all. Chirp-straightening both loops measures 1.91%, which is inside budget.
+  Note where the cost sits: the secondary loop alone is 1.86% of that 4.40%, more than all
+  three springs together, to render the series that is *30 dB down*. Two tempting
+  optimisations were measured and do not work — see SPEC-001's Reviewer Notes before
+  trying either. Decide before `SpringLine` lands, because chirp-straightening changes the
+  structure `SpringLine` wraps.
 
 ## 9. Repository conventions worth knowing before the first commit
 

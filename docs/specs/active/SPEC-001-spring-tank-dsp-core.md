@@ -1,7 +1,7 @@
 ---
 id: SPEC-001
 title: 'Spring tank DSP core'
-status: ready
+status: in-progress
 created: 2026-10-29
 author: Anthony Coffey
 reviewers: []
@@ -11,6 +11,72 @@ affected_repos: ['birbverb']
 ## Reviewer Notes
 
 <!-- Leave empty until code review. When requesting changes, reviewer adds feedback here: -->
+
+### Implementation note, 2026-10-30 — the CPU budget is already exceeded
+
+The Constraints section budgets **under 2% of one core at 48 kHz** for the whole
+3-spring tank. With `DispersiveAllpass` implemented, the allpass cascades *alone* measure,
+on Apple M-series silicon at `-O3 -march=native -flto`:
+
+| Configuration | Sections/sample | Cost |
+| --- | --- | --- |
+| **As specified** — 3 x `M_low`=100 plus `M_high`=200 | 500 | **4.40%** |
+| Chirp-straightened, both loops at `M/2` | 250 | **1.91%** |
+| The three springs alone, no secondary loop | 300 | 2.52% |
+| The secondary loop alone | 200 | 1.86% |
+
+(At `-O2` without `-march=native` the first row is 6.53%.) Cost is linear in section
+count, about 0.0088% per section per core. This is before `SpringLine` adds delay lines,
+loss filters and reflections, and before SPEC-002's stages spend their own 6%. The
+measuring hardware is also *faster* than the "2020-era laptop" the budget names.
+
+So the constraint is not at risk, it is breached by roughly 2.2x.
+
+**The striking line is the last one.** `M_high` = 200 costs 1.86% — 42% of the total, and
+more than all three springs put together — to render a series that SPEC-001 requirement 11
+puts *at least 30 dB down*. The most expensive single component in the tank is its
+quietest. If an approximation has to go somewhere, that is where it is least audible.
+
+#### Two structural ideas that do not work, both measured
+
+Recorded so nobody spends an afternoon rediscovering them:
+
+- **Decoupling into `integerDelay` independent sample streams.** True for integer `k`:
+  the section reduces to `w[n] = (1-a^2)*s[n] - a*w[n-K]`, which is `K` independent
+  streams. It is **false** for the fractional case we actually use, because the
+  interpolator carries its own first-order recursion (`v[n]` depends on `v[n-1]`) that
+  couples adjacent samples. Replacing the allpass interpolator with an FIR one would
+  restore the decoupling but break unity magnitude, which is the one property the whole
+  component exists to have.
+- **Block-outer, section-inner processing** for cache locality. Measured at **0.35x — three
+  times slower.** There is no locality problem to fix: one chain's entire state is about
+  2.4 KB and already L1-resident, so restructuring only adds `M` round-trips of the audio
+  block through memory. Output is bit-identical, which is how the comparison was made
+  fair; it is simply slower.
+
+At roughly 6.5 cycles per section, the cascade is **latency-bound on the serial dependency
+chain inside each section**, not throughput-bound. Micro-optimising the arithmetic will
+not move it.
+
+#### Options, in the order worth considering
+
+1. **Chirp-straighten the secondary loop only** (`M_high` 200 -> 100), taking the total to
+   roughly 3.5%. Buys the largest single saving at the point the spec itself says is 30 dB
+   down. Does not touch the main series at all.
+2. **Chirp-straighten both loops**, which lands at **1.91% — inside budget**. Published,
+   measured and reversible, but it introduces a known notch at the crossover and we have
+   no listening reference to judge the trade against yet.
+3. **SIMD across chains.** The three springs and the secondary loop are four fully
+   independent cascades, which is the only real parallelism in the structure. The obstacle
+   is that each spring has a different `integerDelay` by design — requirement 4 spreads
+   `F_C` on purpose — so the lanes need either gather loads or a forced common
+   `integerDelay`, which would push some springs' interpolator remainder outside the
+   [0.5, 1.5] window where it is well conditioned.
+4. **Revise the budget**, if a measurement on the actual target hardware says 2% was
+   optimistic rather than the implementation being wasteful.
+
+Needs a decision before `SpringLine` lands, because options 1 and 2 change the structure
+`SpringLine` wraps.
 
 ---
 
@@ -283,21 +349,26 @@ tension, not a formality.
       from measured geometry
 - [x] Resolve the dispersion transition frequency — derived per spring, 2543–4887 Hz
 - [x] Correct the chirp direction in this spec, ADR-001 and the tank study
-- [ ] GREEN: `Dispersion.h` — the three closed forms
-- [ ] `tests/test_dispersion_curve.cpp` — assert the closed forms against the published
+- [x] GREEN: `Dispersion.h` — the three closed forms
+- [x] `tests/test_dispersion_curve.cpp` — assert the closed forms against the published
       numbers. Runs without `SpringTank`, so it is not tagged `[.red]`
-- [ ] RED: `tests/test_dispersion.cpp` — ascending group delay, `F_C` location, secondary
+- [x] RED: `tests/test_dispersion.cpp` — ascending group delay, `F_C` location, secondary
       series direction
-- [ ] RED: `tests/test_decay.cpp` — RT60 measurement helper, then the tracking assertions
-- [ ] GREEN: `DispersiveAllpass` — stretched section with fractional `k` via Parker eq. (6)
-- [ ] GREEN: `SpringLine` — delay loop, allpass cascade, loss filter, reflections
-- [ ] GREEN: `SpringTank` — multi-spring sum, secondary loop, tank-type configuration
-- [ ] RED then GREEN: echo-spacing, spring-mismatch, frequency-dependent decay tests
-- [ ] RED then GREEN: stability and reset tests
-- [ ] Sample-rate independence tests at 44.1 / 48 / 96 / 192 kHz
-- [ ] Denormal handling and a CPU measurement against the budget
+- [x] RED: `tests/test_decay.cpp` — RT60 measurement helper, then the tracking assertions
+- [x] GREEN: `DispersiveAllpass` — stretched section with fractional `k` via Parker eq. (6).
+      `tests/test_dispersive_allpass.cpp` was written against a passthrough skeleton, watched
+      to fail, then promoted out of `[.red]` once the structure realised the curve
+- [x] GREEN: `SpringLine` — delay loop, allpass cascade, loss filter, reflections.
+      `tests/test_spring_line.cpp` covers requirements 1, 2, 5, 6, 7, 8, 9 and 10 at the
+      single-spring level; the tank-level criteria stay with `SpringTank`
+- [x] GREEN: `SpringTank` — multi-spring sum, secondary loop, tank-type configuration
+- [x] RED then GREEN: echo-spacing, spring-mismatch, frequency-dependent decay tests
+- [x] RED then GREEN: stability and reset tests
+- [x] Sample-rate independence tests at 44.1 / 48 / 96 / 192 kHz
+- [x] Denormal handling and a CPU measurement against the budget — see Reviewer Notes;
+      the budget is breached and the decision is deferred until there is something to hear
 - [ ] REFACTOR: review every constant in the DSP files for a comment naming its source
-- [ ] Wire into `tools/render.cpp` for listening tests
+- [x] Wire into `tools/render.cpp` for listening tests
 
 ## Notes
 
