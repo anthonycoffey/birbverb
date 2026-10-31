@@ -73,8 +73,16 @@ public:
     void drawFrame (juce::Graphics& g, int index, juce::Rectangle<int> dest) const
     {
         if (! isValid()) return;
-        g.drawImage (image, dest.toFloat(), juce::RectanglePlacement::stretchToFit,
-                     false, frameRect (index));
+
+        // The integer source/dest overload, because Graphics::drawImage has no
+        // form that takes both a target area and a source rectangle. Integer
+        // coordinates also keep frame edges on pixel boundaries, so a frame
+        // never bleeds a row of its neighbour.
+        const auto src = frameRect (index);
+        g.drawImage (image,
+                     dest.getX(), dest.getY(), dest.getWidth(), dest.getHeight(),
+                     src.getX(),  src.getY(),  src.getWidth(),  src.getHeight(),
+                     false);
     }
 
     void drawFrameForValue (juce::Graphics& g, double normalised, juce::Rectangle<int> dest) const

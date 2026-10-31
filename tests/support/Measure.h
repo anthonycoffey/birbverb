@@ -284,8 +284,11 @@ inline Rt60Result rt60 (const std::vector<float>& ir, double sampleRate)
 // Group delay
 //
 // Unwrapped phase of the impulse response, differentiated. This is what tells us
-// whether the tank actually disperses: a spring's group delay falls with
-// frequency, a plain delay line's is flat.
+// whether the tank actually disperses: a spring's group delay RISES with
+// frequency up to the transition frequency F_C, a plain delay line's is flat.
+// (The descending series is the secondary one, 30 dB down — see the dispersion
+// study. This comment said "falls" and was one of the documents that had the
+// chirp direction backwards.)
 
 /** Group delay in seconds per bin, for bins 0 .. fftSize/2 - 1. */
 inline std::vector<double> groupDelay (const std::vector<float>& ir, int fftSize,
