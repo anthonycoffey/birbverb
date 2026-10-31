@@ -16,6 +16,7 @@ add_executable(birbverb_tests
     test_measure.cpp
     test_stability.cpp
     test_dispersion_curve.cpp
+    test_preset_boot.cpp
     test_dispersive_allpass.cpp
     test_spring_line.cpp
     test_dispersion.cpp

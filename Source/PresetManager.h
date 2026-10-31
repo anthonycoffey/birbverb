@@ -13,9 +13,9 @@
 #include <JuceHeader.h>
 
 #include "ParameterIDs.h"
+#include "dsp/ParameterDefaults.h"
 #include "dsp/PresetData.h"
-
-#include <cmath>
+#include "dsp/PresetState.h"
 
 class PresetManager
 {
@@ -28,8 +28,12 @@ public:
                       .getChildFile ("Presets");
         userDir.createDirectory();
 
+        // Boots on the SPEC-003 boot preset. No load() here: the APVTS defaults
+        // ARE that preset's values (dsp/ParameterDefaults.h), so selecting it is
+        // all it takes, and the host's own "reset to default" lands on the same
+        // state instead of re-lighting the modified marker.
         if (! apvts.state.hasProperty (indexProp))
-            apvts.state.setProperty (indexProp, 0, nullptr);   // boots on "Twin '64"
+            apvts.state.setProperty (indexProp, bv::defaults::bootPresetIndex, nullptr);
     }
 
     //==========================================================================
@@ -69,36 +73,36 @@ public:
     int currentIndex() const { return (int) apvts.state.getProperty (indexProp, -1); }
 
     //==========================================================================
-    /** True when a parameter has drifted from the loaded factory preset.
-        Per-parameter tolerances, because a value that round-trips through
-        normalisation is not bit-identical and should not read as modified. */
+    /** The nine stored parameters, denormalised, as the JUCE-free comparison in
+        dsp/PresetState.h wants them. */
+    bv::ParamValues currentValues() const
+    {
+        auto v = [this] (const char* id) { return apvts.getRawParameterValue (id)->load(); };
+
+        return { (int) v (bv::ids::circuit), (int) v (bv::ids::tank),
+                 v (bv::ids::dwell), (double) v (bv::ids::decay),
+                 v (bv::ids::tone),  (double) v (bv::ids::locut),
+                 v (bv::ids::boing), v (bv::ids::mix), v (bv::ids::level) };
+    }
+
+    /** True when a parameter has drifted from the loaded factory preset. The
+        comparison and its per-parameter tolerances live in dsp/PresetState.h so
+        the tests can exercise them without JUCE. */
     bool isDirty() const
     {
         const int i = currentIndex();
         if (! juce::isPositiveAndBelow (i, getNumPresets())) return false;   // user / manual
 
-        const auto& p = bv::factoryPresets[(size_t) i];
-        auto v = [this] (const char* id) { return apvts.getRawParameterValue (id)->load(); };
-
-        return (int) v (bv::ids::circuit) != (int) p.circuit
-            || (int) v (bv::ids::tank)    != (int) p.tank
-            || std::abs (v (bv::ids::dwell) - p.dwell)          > 0.02f
-            || std::abs (v (bv::ids::decay) - (float) p.decay)  > 0.02f
-            || std::abs (v (bv::ids::tone)  - p.tone)           > 0.02f
-            || std::abs (v (bv::ids::locut) - (float) p.locut)  > 1.0f
-            || std::abs (v (bv::ids::boing) - p.boing)          > 0.02f
-            || std::abs (v (bv::ids::mix)   - p.mix)            > 0.05f
-            || std::abs (v (bv::ids::level) - p.level)          > 0.05f;
+        return ! bv::matchesPreset (bv::factoryPresets[(size_t) i], currentValues());
     }
 
     juce::String displayName() const
     {
-        const int i = currentIndex();
-        if (juce::isPositiveAndBelow (i, getNumPresets()))
-            return getName (i) + (isDirty() ? " *" : "");
-
         const juce::String user = apvts.state.getProperty (nameProp, "").toString();
-        return user.isNotEmpty() ? user : "Manual";
+        if (! juce::isPositiveAndBelow (currentIndex(), getNumPresets()) && user.isNotEmpty())
+            return user;
+
+        return juce::String (bv::presetDisplayName (currentIndex(), currentValues()));
     }
 
     //==========================================================================

@@ -100,6 +100,8 @@ Source/
     ReverbEngine.h      dry path, mix, level, bypass (real); wet path (stubbed)
     EngineParams.h      denormalised params handed to the engine each block
     PresetData.h        the JUCE-free factory preset table
+    ParameterDefaults.h SPEC-003's default column, and which preset boots
+    PresetState.h       modified-marker tolerances, the preset display string
   ui/
     SpriteAtlas.h       one atlas: grid geometry + frame drawing
     SpriteStore.h       manifest loading, 1x/@2x, per-atlas fallback
@@ -107,6 +109,7 @@ tests/
   support/              Measure.h, Generate.h, Approx.h, Stability.h
   test_*.cpp            one file per spec area
                         test_dispersion_curve.cpp is NOT red — it tests pure math
+                        test_preset_boot.cpp is NOT red — tables and a comparison
 Assets/sprites/         sprites.json + the art (none committed yet)
 tools/                  render.cpp, wav.h
 docs/                   the central hub — see docs/README.md
@@ -177,6 +180,12 @@ A test that has never been seen to fail has not been shown to test anything.
   They are a draft and are expected to be wrong. SPEC-004 requires listening before they
   are final.
 - **`isDirty()` needs per-parameter tolerances.** A value that round-trips through
-  normalisation is not bit-identical and must not read as modified.
+  normalisation is not bit-identical and must not read as modified. The tolerances and the
+  comparison live in `Source/dsp/PresetState.h`, JUCE-free, so the tests can reach them.
+- **SPEC-003's defaults and SPEC-004's `Twin '64` row are the same position.** The plugin
+  boots on that preset, so `Source/dsp/ParameterDefaults.h` and the `Twin '64` row of
+  `Source/dsp/PresetData.h` must agree within the modified-marker tolerances, or a fresh
+  launch displays `Twin '64 *`. Move one, move both; `tests/test_preset_boot.cpp` asserts
+  it.
 - **The license is AGPLv3, not GPLv3.** JUCE's open-source option is AGPLv3, and the two
   are not interchangeable. Do not write "GPL" in new files or docs.

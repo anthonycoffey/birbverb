@@ -85,6 +85,13 @@ the moment a value drifts from its snapshot.
 Values below are the **proposed** circuit-correct settings. They are derived from the
 circuit studies and must be reviewed against them before this spec reaches `ready`.
 
+`Twin '64` carries one extra obligation the other four do not: it is the preset the
+plugin boots with, so its row is also [SPEC-003](SPEC-003-parameter-model.md)'s parameter
+default column. Moving a value here means moving that column too — see *The default
+column is the boot state* in SPEC-003 for why the defaults follow this row rather than
+the other way round. `tests/test_preset_boot.cpp` fails if the two drift apart, which is
+how the drift that shipped (`tone` and `mix`) was found.
+
 | Preset | `circuit` | `tank` | `dwell` | `decay` | `tone` | `locut` | `boing` | `mix` | `level` |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | **Twin '64** | AB763 | Long 2-Spring | 5.0 | 3.4 | 5.5 | 318 | 5.0 | 28 | 0.0 |
@@ -189,6 +196,8 @@ that admits what it is.
 
 - [ ] Review every foundation value against its circuit study; correct the table above
       before this spec goes `ready`
+- [ ] When that review touches `Twin '64`, carry the change into SPEC-003's default
+      column in the same commit — the boot state is that row
 - [x] Resolve: does the bank need a separate Ampeg Echo Jet preset? **Yes** — shipped as
       `Echo Jet '63`, voiced on the Reverberocket circuit, because the Echo Jet is a
       different design and we have no schematic for it
@@ -210,6 +219,9 @@ that admits what it is.
 - Parameter definitions: [SPEC-003](SPEC-003-parameter-model.md)
 - Per-amp circuit behaviour: [SPEC-002](SPEC-002-tube-drive-and-recovery-stages.md)
 - Preset display and browser UI: [SPEC-005](SPEC-005-sprite-based-pedal-ui.md)
+- The boot state — which preset a fresh instance shows, and why it reads as unmodified —
+  is specified in [SPEC-003](SPEC-003-parameter-model.md), not here. This spec owns the
+  values; that one owns what happens at launch.
 - The derived preset values in the table are a **starting draft written without listening
   to the engine**, because the engine does not exist yet. They will be wrong. The task
   list says to listen before committing them, and that task is not optional.
